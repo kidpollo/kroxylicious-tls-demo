@@ -1,0 +1,82 @@
+services:
+  # Modern Kafka (KRaft mode - no Zookeeper needed!)
+  kafka:
+    image: apache/kafka:latest
+    container_name: kafka
+    ports:
+      - "9092:9092"  # External plaintext
+      - "9093:9093"  # Internal TLS with mTLS
+    volumes:
+      - ./certs:/opt/kafka/certs:ro
+      - ./principal-builder/target/kafka-principal-builder-1.0.0.jar:/opt/kafka/libs/kafka-principal-builder.jar:ro
+    environment:
+      # KRaft cluster config
+      CLUSTER_ID: "kroxy-test-cluster-123456"
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:9094"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      
+      # Listeners
+      KAFKA_LISTENERS: "EXTERNAL://:9092,INTERNAL://:9093,CONTROLLER://:9094"
+      KAFKA_ADVERTISED_LISTENERS: "EXTERNAL://localhost:9092,INTERNAL://kafka:9093"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "EXTERNAL:PLAINTEXT,INTERNAL:SSL,CONTROLLER:PLAINTEXT"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "EXTERNAL"
+      
+      # TLS Configuration for INTERNAL listener
+      KAFKA_SSL_KEYSTORE_LOCATION: /opt/kafka/certs/kafka-server.keystore.jks
+      KAFKA_SSL_KEYSTORE_PASSWORD: changeit
+      KAFKA_SSL_KEY_PASSWORD: changeit
+      KAFKA_SSL_TRUSTSTORE_LOCATION: /opt/kafka/certs/kafka.truststore.jks
+      KAFKA_SSL_TRUSTSTORE_PASSWORD: changeit
+      KAFKA_SSL_CLIENT_AUTH: required
+      
+      # Custom Principal Builder (THIS IS THE KEY!)
+      KAFKA_PRINCIPAL_BUILDER_CLASS: "io.kroxylicious.demo.LoggingPrincipalBuilder"
+      
+      # Replication factors for single broker
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      
+      # Logging
+      KAFKA_LOG4J_ROOT_LOGLEVEL: INFO
+    networks:
+      - kafka-net
+
+  # Kroxylicious Proxy with TLS Credential Supplier Plugin
+  # Exposes 3 virtual clusters on different ports
+  # 
+  # IMPORTANT: This image must support the TLS Credential Supplier API.
+  # Build from Kroxylicious source: mvn clean install -Dquick -Pdist
+  # If using a different image/tag, update the line below.
+  kroxylicious:
+    image: quay.io/kroxylicious/proxy:0.19.0-SNAPSHOT
+    container_name: kroxylicious
+    depends_on:
+      - kafka
+    ports:
+      - "9192:9192"   # Virtual cluster demo1: bootstrap
+      - "9200:9200"   # Virtual cluster demo1: broker node 0 (if exists)
+      - "9201:9201"   # Virtual cluster demo1: broker node 1 (actual Kafka node)
+      - "9210:9210"   # Virtual cluster demo2: bootstrap
+      - "9220:9220"   # Virtual cluster demo2: broker node 0 (if exists)
+      - "9221:9221"   # Virtual cluster demo2: broker node 1 (actual Kafka node)
+      - "9230:9230"   # Virtual cluster demo3: bootstrap
+      - "9240:9240"   # Virtual cluster demo3: broker node 0 (if exists)
+      - "9241:9241"   # Virtual cluster demo3: broker node 1 (actual Kafka node)
+    volumes:
+      - ./proxy-config.yaml:/opt/kroxylicious/config/config.yaml:ro
+      - ./certs:/opt/kroxylicious/certs:ro
+      - ./tls-plugin/target/rotating-tls-credential-supplier-1.0.0.jar:/opt/kroxylicious/libs/tls-plugin.jar:ro
+    environment:
+      KROXYLICIOUS_CLASSPATH: "/opt/kroxylicious/libs/tls-plugin.jar"
+      KROXYLICIOUS_ROOT_LOG_LEVEL: INFO
+    command: ["--config", "/opt/kroxylicious/config/config.yaml"]
+    networks:
+      - kafka-net
+
+networks:
+  kafka-net:
+    driver: bridge

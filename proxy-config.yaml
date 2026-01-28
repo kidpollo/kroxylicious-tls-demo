@@ -1,0 +1,109 @@
+# Kroxylicious Configuration with 3 Virtual Clusters
+# Each virtual cluster uses the same TLS credential supplier plugin,
+# which should rotate through certificates as new connections are made.
+
+virtualClusters:
+  # ═══════════════════════════════════════════════════════
+  # VIRTUAL CLUSTER 1 - Ports 9192 (bootstrap) + 9193 (broker)
+  # Expected to use: proxy-cert-1.pem → CN=proxy-client-1
+  # ═══════════════════════════════════════════════════════
+  - name: demo1
+    targetCluster:
+      bootstrapServers: kafka:9093  # TLS port with mTLS
+      
+      tls:
+        trust:
+          storeFile: /opt/kroxylicious/certs/ca.crt
+          storeType: PEM
+        
+        tlsCredentialSupplier:
+          type: "io.kroxylicious.demo.RotatingTlsCredentialSupplier"
+          config:
+            certPaths:
+              - /opt/kroxylicious/certs/proxy-cert-1.pem
+              - /opt/kroxylicious/certs/proxy-cert-2.pem
+              - /opt/kroxylicious/certs/proxy-cert-3.pem
+            keyPaths:
+              - /opt/kroxylicious/certs/proxy-key-1.pem
+              - /opt/kroxylicious/certs/proxy-key-2.pem
+              - /opt/kroxylicious/certs/proxy-key-3.pem
+    
+    gateways:
+      - name: gateway1
+        portIdentifiesNode:
+          bootstrapAddress: localhost:9192
+          advertisedBrokerAddressPattern: localhost
+          nodeStartPort: 9200
+
+    logNetwork: false
+    logFrames: false
+
+  # ═══════════════════════════════════════════════════════
+  # VIRTUAL CLUSTER 2 - Ports 9194 (bootstrap) + 9195 (broker)
+  # Expected to use: proxy-cert-2.pem → CN=proxy-client-2
+  # ═══════════════════════════════════════════════════════
+  - name: demo2
+    targetCluster:
+      bootstrapServers: kafka:9093
+      
+      tls:
+        trust:
+          storeFile: /opt/kroxylicious/certs/ca.crt
+          storeType: PEM
+        
+        tlsCredentialSupplier:
+          type: "io.kroxylicious.demo.RotatingTlsCredentialSupplier"
+          config:
+            certPaths:
+              - /opt/kroxylicious/certs/proxy-cert-1.pem
+              - /opt/kroxylicious/certs/proxy-cert-2.pem
+              - /opt/kroxylicious/certs/proxy-cert-3.pem
+            keyPaths:
+              - /opt/kroxylicious/certs/proxy-key-1.pem
+              - /opt/kroxylicious/certs/proxy-key-2.pem
+              - /opt/kroxylicious/certs/proxy-key-3.pem
+    
+    gateways:
+      - name: gateway2
+        portIdentifiesNode:
+          bootstrapAddress: localhost:9210
+          advertisedBrokerAddressPattern: localhost
+          nodeStartPort: 9220
+
+    logNetwork: false
+    logFrames: false
+
+  # ═══════════════════════════════════════════════════════
+  # VIRTUAL CLUSTER 3 - Ports 9196 (bootstrap) + 9197 (broker)
+  # Expected to use: proxy-cert-3.pem → CN=proxy-client-3
+  # ═══════════════════════════════════════════════════════
+  - name: demo3
+    targetCluster:
+      bootstrapServers: kafka:9093
+      
+      tls:
+        trust:
+          storeFile: /opt/kroxylicious/certs/ca.crt
+          storeType: PEM
+        
+        tlsCredentialSupplier:
+          type: "io.kroxylicious.demo.RotatingTlsCredentialSupplier"
+          config:
+            certPaths:
+              - /opt/kroxylicious/certs/proxy-cert-1.pem
+              - /opt/kroxylicious/certs/proxy-cert-2.pem
+              - /opt/kroxylicious/certs/proxy-cert-3.pem
+            keyPaths:
+              - /opt/kroxylicious/certs/proxy-key-1.pem
+              - /opt/kroxylicious/certs/proxy-key-2.pem
+              - /opt/kroxylicious/certs/proxy-key-3.pem
+    
+    gateways:
+      - name: gateway3
+        portIdentifiesNode:
+          bootstrapAddress: localhost:9230
+          advertisedBrokerAddressPattern: localhost
+          nodeStartPort: 9240
+
+    logNetwork: false
+    logFrames: false
