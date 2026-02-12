@@ -10,14 +10,23 @@
  */
 package io.kroxylicious.demo;
 
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.ByteArrayInputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.KeyFactory;
+import java.security.PrivateKey;
+import java.security.cert.Certificate;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -144,6 +153,55 @@ public class RotatingTlsCredentialSupplier
         System.out.println("═══════════════════════════════════════════════════════");
     }
 
+    private static final Pattern PRIVATE_KEY_PATTERN = Pattern.compile(
+            "-----BEGIN (?:RSA )?PRIVATE KEY-----\\s*(.+?)\\s*-----END (?:RSA )?PRIVATE KEY-----",
+            Pattern.DOTALL);
+
+    /**
+     * Loads a PEM-encoded private key from a file.
+     * Plugin authors are responsible for their own credential parsing.
+     */
+    static PrivateKey loadPrivateKey(Path path) throws Exception {
+        String pem = Files.readString(path);
+        Matcher matcher = PRIVATE_KEY_PATTERN.matcher(pem);
+        if (!matcher.find()) {
+            throw new IllegalArgumentException("No private key found in: " + path);
+        }
+        byte[] keyBytes = Base64.getDecoder().decode(matcher.group(1).replaceAll("\\s", ""));
+        PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(keyBytes);
+        for (String algorithm : new String[]{ "RSA", "EC", "DSA" }) {
+            try {
+                return KeyFactory.getInstance(algorithm).generatePrivate(keySpec);
+            } catch (Exception ignored) {
+                // try next
+            }
+        }
+        throw new IllegalArgumentException("Could not parse private key from: " + path);
+    }
+
+    /**
+     * Loads a PEM-encoded certificate chain from a file.
+     * Plugin authors are responsible for their own credential parsing.
+     */
+    static Certificate[] loadCertificateChain(Path path) throws Exception {
+        byte[] pemBytes = Files.readAllBytes(path);
+        CertificateFactory cf = CertificateFactory.getInstance("X.509");
+        List<Certificate> certs = new ArrayList<>();
+        try (ByteArrayInputStream bais = new ByteArrayInputStream(pemBytes)) {
+            while (bais.available() > 0) {
+                try {
+                    certs.add(cf.generateCertificate(bais));
+                } catch (Exception e) {
+                    break;
+                }
+            }
+        }
+        if (certs.isEmpty()) {
+            throw new IllegalArgumentException("No certificates found in: " + path);
+        }
+        return certs.toArray(new Certificate[0]);
+    }
+
     /**
      * The actual credential supplier that handles per-connection requests
      */
@@ -187,20 +245,18 @@ public class RotatingTlsCredentialSupplier
             
             System.out.println("═══════════════════════════════════════════════════════");
 
-            // Load certificate and key from files
-            // Note: We must read the full contents before calling context.tlsCredentials
-            // because it processes the streams asynchronously
+            // Plugin is responsible for loading and parsing credentials
+            // from whatever format it uses (PEM files in this case)
             try {
-                byte[] certBytes = Files.readAllBytes(certPath);
-                byte[] keyBytes = Files.readAllBytes(keyPath);
-                
-                return context.tlsCredentials(
-                    new java.io.ByteArrayInputStream(certBytes),
-                    new java.io.ByteArrayInputStream(keyBytes)
-                );
-                
-            } catch (IOException e) {
-                System.err.println("❌ Failed to load credentials: " + e.getMessage());
+                PrivateKey privateKey = loadPrivateKey(keyPath);
+                Certificate[] certChain = loadCertificateChain(certPath);
+
+                // Pass already-parsed JDK objects to the context for validation and wrapping
+                TlsCredentials creds = context.tlsCredentials(privateKey, certChain);
+                return CompletableFuture.completedFuture(creds);
+
+            } catch (Exception e) {
+                System.err.println("Failed to load credentials: " + e.getMessage());
                 e.printStackTrace();
                 return CompletableFuture.failedFuture(e);
             }

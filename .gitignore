@@ -11,16 +11,15 @@ buildNumber.properties
 .mvn/wrapper/maven-wrapper.jar
 
 # Generated certificates (regenerate with ./generate-certs.sh)
-certs/*.crt
-certs/*.key
-certs/*.pem
-certs/*.jks
-certs/*.srl
+certs/
 
 # IDE files
 .idea/
 *.iml
 .vscode/
+.classpath
+.project
+.settings/
 *.swp
 *.swo
 *~
