@@ -16,7 +16,7 @@ virtualClusters:
           storeFile: /opt/kroxylicious/certs/ca.crt
           storeType: PEM
         
-        tlsCredentialSupplier:
+        credentialSupplier:
           type: "io.kroxylicious.demo.RotatingTlsCredentialSupplier"
           config:
             certPaths:
@@ -51,7 +51,7 @@ virtualClusters:
           storeFile: /opt/kroxylicious/certs/ca.crt
           storeType: PEM
         
-        tlsCredentialSupplier:
+        credentialSupplier:
           type: "io.kroxylicious.demo.RotatingTlsCredentialSupplier"
           config:
             certPaths:
@@ -86,7 +86,7 @@ virtualClusters:
           storeFile: /opt/kroxylicious/certs/ca.crt
           storeType: PEM
         
-        tlsCredentialSupplier:
+        credentialSupplier:
           type: "io.kroxylicious.demo.RotatingTlsCredentialSupplier"
           config:
             certPaths:

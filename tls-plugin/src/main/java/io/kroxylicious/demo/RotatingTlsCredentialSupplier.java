@@ -15,7 +15,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.KeyFactory;
 import java.security.PrivateKey;
-import java.security.cert.Certificate;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.security.spec.PKCS8EncodedKeySpec;
@@ -183,14 +182,17 @@ public class RotatingTlsCredentialSupplier
      * Loads a PEM-encoded certificate chain from a file.
      * Plugin authors are responsible for their own credential parsing.
      */
-    static Certificate[] loadCertificateChain(Path path) throws Exception {
+    static X509Certificate[] loadCertificateChain(Path path) throws Exception {
         byte[] pemBytes = Files.readAllBytes(path);
         CertificateFactory cf = CertificateFactory.getInstance("X.509");
-        List<Certificate> certs = new ArrayList<>();
+        List<X509Certificate> certs = new ArrayList<>();
         try (ByteArrayInputStream bais = new ByteArrayInputStream(pemBytes)) {
             while (bais.available() > 0) {
                 try {
-                    certs.add(cf.generateCertificate(bais));
+                    java.security.cert.Certificate cert = cf.generateCertificate(bais);
+                    if (cert instanceof X509Certificate x509) {
+                        certs.add(x509);
+                    }
                 } catch (Exception e) {
                     break;
                 }
@@ -199,7 +201,7 @@ public class RotatingTlsCredentialSupplier
         if (certs.isEmpty()) {
             throw new IllegalArgumentException("No certificates found in: " + path);
         }
-        return certs.toArray(new Certificate[0]);
+        return certs.toArray(new X509Certificate[0]);
     }
 
     /**
@@ -249,7 +251,7 @@ public class RotatingTlsCredentialSupplier
             // from whatever format it uses (PEM files in this case)
             try {
                 PrivateKey privateKey = loadPrivateKey(keyPath);
-                Certificate[] certChain = loadCertificateChain(certPath);
+                X509Certificate[] certChain = loadCertificateChain(certPath);
 
                 // Pass already-parsed JDK objects to the context for validation and wrapping
                 TlsCredentials creds = context.tlsCredentials(privateKey, certChain);

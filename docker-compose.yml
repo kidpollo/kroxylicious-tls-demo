@@ -52,7 +52,7 @@ services:
   # Build from Kroxylicious source: mvn clean install -Dquick -Pdist
   # If using a different image/tag, update the line below.
   kroxylicious:
-    image: quay.io/kroxylicious/proxy:0.19.0-SNAPSHOT
+    image: quay.io/kroxylicious/proxy:0.20.0-SNAPSHOT
     container_name: kroxylicious
     depends_on:
       - kafka
